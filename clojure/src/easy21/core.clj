@@ -1,15 +1,17 @@
 (ns easy21.core
   (:require [clojure.spec :as s]
+            [clojure.spec.gen :as gen]
             [easy21.action :as action]
             [easy21.color :as color]))
 
-(s/def ::color #{::color/black ::color/red})
-(s/def ::number (s/int-in 1 11))
-(s/def ::card (s/keys :req [::color ::number]))
-(s/def ::hand (s/coll-of ::card :kind sequential?))
-(s/def ::player-sum (s/int-in -9 32))
-(s/def ::dealer-hand ::hand)
-(s/def ::observation (s/keys :req [::player-sum ::dealer-hand]))
+(s/def ::black-card (s/int-in 1 11))
+(s/def ::red-card (s/int-in -1 -11))
+(s/def ::card (s/or :black ::black-card :red ::red-card))
+(s/def ::cards (s/coll-of ::card :kind sequential?))
+(s/def ::sum (s/int-in -9 32))
+(s/def ::player-sum ::sum)
+(s/def ::dealer-sum ::sum)
+(s/def ::observation (s/keys :req [::player-sum ::dealer-sum]))
 (s/def ::action #{::action/hit ::action/stick})
 (s/def ::state (s/keys :req [::observation ::done?]))
 (s/def ::reward (s/int-in -1 2))
@@ -44,6 +46,55 @@
           [new-state new-reward]
           (step state action)]
       [new-state new-reward new-experience new-action])))
+
+(defn rand-number []
+  (inc (rand-int 10)))
+
+(defn rand-color []
+  (if (zero? (rand-int 3))
+    -1
+    1))
+
+(defn rand-card []
+  (* (rand-color) (rand-number)))
+
+(defn reset []
+  {::observation {::player-sum (rand-number)
+                  ::dealer-sum (rand-number)}
+   ::done? false})
+
+(defn bust? [player-sum]
+  (not (s/int-in-range? 1 22 player-sum)))
+
+(defmulti step (fn [_ action] action))
+
+(defmethod step :hit [{prev-obs ::observation :as prev-state} _]
+  (let [new-player-sum (+ (::player-sum prev-obs) (rand-card))]
+    [(-> prev-state
+         (assoc-in [::observation ::player-sum] new-player-sum)
+         (assoc ::done? (bust? new-player-sum)))
+     (if (bust? new-player-sum) -1 0)]))
+
+;;; Note: I wish I could implement the dealer as a deterministic strategy with
+;;; the same signature as `think`. However, I would have to extend `step`, so
+;;; that it can react to both player and dealer actions. Also, I'd have to
+;;; introduce recursion. This is all complicated, so I leave it at the threading
+;;; form below.
+(defmethod step :stick [{prev-obs ::observation :as prev-state} _]
+  (let [final-dealer-sum
+        (->> (::dealer-sum prev-obs)
+             (iterate #(+ % (rand-card)))
+             (drop-while #(not (or (bust? %) (>= % 17))))
+             first)
+
+        reward
+        (if (bust? final-dealer-sum)
+          1
+          (Integer/signum (- (::player-sum prev-obs) final-dealer-sum)))]
+    [{::observation {::player-sum (::player-sum prev-obs)
+                     ::dealer-sum final-dealer-sum}
+      ::done? true}
+     reward]))
 
 (comment
   (iterate (stepper step think) [(init) 0 current-experience nil]))
