@@ -17,15 +17,31 @@
 (s/def ::reward (s/int-in -1 2))
 (s/def ::done? boolean?)
 
-(s/def ::experience some?)
+(s/def ::experience true)
 
 (s/fdef reset
   :args (s/cat)
   :ret ::state)
 
+(declare bust?)
+
+(defn stick-and-done? [{{:keys [action]} :args
+                       {:keys [new-state]} :ret}]
+  (and (= ::action/stick action) (::done? new-state)))
+
+(defn bust-and-done? [{{{:keys [observation] :as new-state} :new-state} :ret}]
+  (and (or (bust? (::player-sum observation))
+           (bust? (::dealer-sum observation)))
+       (::done? new-state)))
+
+(defn single-bust? [{{{:keys [observation]} :new-state} :ret}]
+  (not (and (bust? (::player-sum observation))
+            (bust? (::dealer-sum observation)))))
+
 (s/fdef step
   :args (s/cat :state ::state :action ::action)
-  :ret (s/cat :new-state ::state :new-reward ::reward))
+  :ret (s/cat :new-state ::state :new-reward ::reward)
+  :fn (s/and stick-and-done? bust-and-done? single-bust?))
 
 (s/fdef init
   :args (s/cat)
@@ -40,12 +56,16 @@
   (fn complete-step [[state reward experience action]]
     (if (::done? state)
       [state 0 experience nil])
-    (let [[new-action new-experience]
+    (let [[new-experience new-action]
           (think experience (::observation state) reward)
 
           [new-state new-reward]
-          (step state action)]
+          (step state new-action)]
       [new-state new-reward new-experience new-action])))
+
+(defn until-done [timesteps]
+  (let [[not-done done] (split-with #(not (::done? (first %))) timesteps)]
+    (conj (vec not-done) (first done))))
 
 (defn rand-number []
   (inc (rand-int 10)))
@@ -68,7 +88,7 @@
 
 (defmulti step (fn [_ action] action))
 
-(defmethod step :hit [{prev-obs ::observation :as prev-state} _]
+(defmethod step ::action/hit [{prev-obs ::observation :as prev-state} _]
   (let [new-player-sum (+ (::player-sum prev-obs) (rand-card))]
     [(-> prev-state
          (assoc-in [::observation ::player-sum] new-player-sum)
@@ -80,7 +100,7 @@
 ;;; that it can react to both player and dealer actions. Also, I'd have to
 ;;; introduce recursion. This is all complicated, so I leave it at the threading
 ;;; form below.
-(defmethod step :stick [{prev-obs ::observation :as prev-state} _]
+(defmethod step ::action/stick [{prev-obs ::observation :as prev-state} _]
   (let [final-dealer-sum
         (->> (::dealer-sum prev-obs)
              (iterate #(+ % (rand-card)))
@@ -95,6 +115,11 @@
                      ::dealer-sum final-dealer-sum}
       ::done? true}
      reward]))
+
+(defn dealer-think [_ observation _]
+  (if (>= (::player-sum observation) 17)
+    [nil ::action/stick]
+    [nil ::action/hit]))
 
 (comment
   (iterate (stepper step think) [(init) 0 current-experience nil]))
