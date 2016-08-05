@@ -16,8 +16,14 @@
 
   (s/conform (s/cat :new-state keyword?) [:bla])
 
-  (stest/unstrument)
   (refresh)
+
+  (require '[easy21.core-test :as ct])
+  (gen/sample ct/not-done-state-gen)
+
+  (stest/check `step)
+
+  (stest/unstrument)
   (stest/instrument (stest/instrumentable-syms))
 
   (pprint (until-done

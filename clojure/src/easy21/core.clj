@@ -4,6 +4,24 @@
             [easy21.action :as action]
             [easy21.color :as color]))
 
+(declare bust?)
+
+(defn implies [a b]
+  (or (not a) b))
+
+(defn bust-then-done? [{:keys [::observation] :as state}]
+  (implies (or (bust? (::player-sum observation))
+               (bust? (::dealer-sum observation)))
+           (::done? state)))
+
+(defn single-bust? [observation]
+  (not (and (bust? (::player-sum observation))
+            (bust? (::dealer-sum observation)))))
+
+(defn dealer-hit-then-done? [{:keys [::observation] :as state}]
+  (implies (not (s/valid? ::black-card (::dealer-sum observation)))
+           (::done? state)))
+
 (s/def ::black-card (s/int-in 1 11))
 (s/def ::red-card (s/int-in -1 -11))
 (s/def ::card (s/or :black ::black-card :red ::red-card))
@@ -11,9 +29,12 @@
 (s/def ::sum (s/int-in -9 32))
 (s/def ::player-sum ::sum)
 (s/def ::dealer-sum ::sum)
-(s/def ::observation (s/keys :req [::player-sum ::dealer-sum]))
+(s/def ::observation (s/and (s/keys :req [::player-sum ::dealer-sum])
+                            single-bust?))
 (s/def ::action #{::action/hit ::action/stick})
-(s/def ::state (s/keys :req [::observation ::done?]))
+(s/def ::state (s/and (s/keys :req [::observation ::done?])
+                      bust-then-done?
+                      dealer-hit-then-done?))
 (s/def ::reward (s/int-in -1 2))
 (s/def ::done? boolean?)
 
@@ -23,25 +44,14 @@
   :args (s/cat)
   :ret ::state)
 
-(declare bust?)
-
 (defn stick-and-done? [{{:keys [action]} :args
                        {:keys [new-state]} :ret}]
-  (and (= ::action/stick action) (::done? new-state)))
-
-(defn bust-and-done? [{{{:keys [observation] :as new-state} :new-state} :ret}]
-  (and (or (bust? (::player-sum observation))
-           (bust? (::dealer-sum observation)))
-       (::done? new-state)))
-
-(defn single-bust? [{{{:keys [observation]} :new-state} :ret}]
-  (not (and (bust? (::player-sum observation))
-            (bust? (::dealer-sum observation)))))
+  (implies (= ::action/stick action) (::done? new-state)))
 
 (s/fdef step
-  :args (s/cat :state ::state :action ::action)
+  :args (s/cat :state (s/and ::state #(not (::done? %))) :action ::action)
   :ret (s/cat :new-state ::state :new-reward ::reward)
-  :fn (s/and stick-and-done? bust-and-done? single-bust?))
+  :fn (s/and stick-and-done?))
 
 (s/fdef init
   :args (s/cat)
