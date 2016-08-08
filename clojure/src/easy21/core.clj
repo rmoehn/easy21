@@ -126,6 +126,32 @@
       ::done? true}
      reward]))
 
+(defn init []
+  {::policy {}
+   ::n0 100
+   ::nseen {}})
+
+(defn rand-action []
+  (rand-nth [::action/stick ::action/hit]))
+
+(defn rand-explore? [n0 nseen]
+  (< (rand-int (+ n0 nseen) n0))) ; true with probability n0 / (n0 + nseen)
+
+(defn policy [{:keys [::policy ::n0 ::nseen] :as experience} observation]
+  (if (zero? (get nseen observation 0))
+    (let [action (rand-action)]
+      [(-> experience
+           (assoc-in [::policy observation] action)
+           (assoc-in [::nseen observation] 1))
+       action])
+    (if (rand-explore? n0 (get nseen observation))
+      [experience (rand-action)]
+      [(update-in experience [::nseen observation] inc)
+       (get-in experience [::policy observation])])))
+
+(defn policy-think [experience observation _]
+  (policy experience observation))
+
 (defn dealer-think [_ observation _]
   (if (>= (::player-sum observation) 17)
     [nil ::action/stick]
