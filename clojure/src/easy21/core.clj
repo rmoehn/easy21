@@ -129,7 +129,8 @@
 (defn init []
   {::policy {}
    ::n0 100
-   ::nseen {}})
+   ::nseen {}
+   ::episode []})
 
 (defn rand-action []
   (rand-nth [::action/stick ::action/hit]))
@@ -149,8 +150,36 @@
       [(update-in experience [::nseen observation] inc)
        (get-in experience [::policy observation])])))
 
-(defn policy-think [experience observation _]
-  (policy experience observation))
+(defn policy-think [experience observation reward]
+  (let [[experience action] (policy experience observation)]
+    [(update experience ::episode
+             #(conj % {::observation observation
+                       ::reward reward
+                       ::action action}))
+     action]))
+
+(defn wrapup [{:keys [::episode ::n-s-a ::q]}]
+  (let [g-t (->> episode
+                 (map ::reward)
+                 reverse
+                 (reductions +)
+                 reverse)
+        timesteps-with-g-t (map #(assoc %1 ::g-t %2) episode g-t)
+
+        new-q
+        (reduce (fn [{:keys [::observation ::action ::g-t]} q]
+                  (update-in q [observation timestep]
+                             #(let [old-q (or % 0)]
+                                (+ old-q (* (/ 1 (get-in n-s-a
+                                                         [observation action]))
+                                            (- g-t old-q))))))
+                q
+                timesteps-with-g-t)
+
+        ; Credits: https://clojuredocs.org/clojure.core/max-key#example-5490032de4b09260f767ca79
+        new-policy
+        (into {} (map #(vec % (apply max-key val (get q %)))
+                      policy))]))
 
 (defn dealer-think [_ observation _]
   (if (>= (::player-sum observation) 17)
