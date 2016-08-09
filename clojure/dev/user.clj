@@ -6,7 +6,8 @@
             [clojure.spec.gen :as gen]
             [clojure.spec.test :as stest]
             [clojure.tools.namespace.repl :refer [refresh]]
-            [easy21.core :as easy21 :refer :all]))
+            [easy21.core :as easy21 :refer :all])
+  (:import org.jzy3d.analysis.AnalysisLauncher))
 
 (comment
 
@@ -24,10 +25,48 @@
   (stest/check `step)
 
   (stest/unstrument)
-  (stest/instrument (stest/instrumentable-syms))
 
-  (pprint (until-done
-            (iterate (stepper step dealer-think) [(reset) 0 nil nil])))
+  (refresh)
+  ;(stest/instrument (stest/instrumentable-syms))
+  (let [complete-step (stepper step policy-think)
+        train-and-prep (make-train-and-prep reset init complete-step wrapup)
+
+        some-timestep-vector
+        (->> [(reset) 0 (init) nil]
+             (iterate train-and-prep)
+             (drop 100)
+             first)
+
+        experience (nth some-timestep-vector 2)
+
+        the-v-matrx
+        (-> experience
+            ::easy21/q
+            v-from-q
+            v-matrix)]
+    (AnalysisLauncher/open (make-q-plot (make-mapper the-v-matrx))))
+
+  (require '[com.rpl.specter :refer [ALL END LAST] :as sr]
+           '[com.rpl.specter.macros :as srm])
+
+  (def experience {::episode [{::observation :bli0 ::action ::bla0 ::reward 4}
+                              {::observation :bli1 ::action ::bla1}]})
+
+  (srm/setval [::episode LAST ::reward] 5 experience)
+
+  (srm/setval [::episode END] [{:b :bu}] experience)
+
+  (srm/transform
+    #()
+    {:a {:b 4}
+     :c {:d 5}})
+
+  (defn make-point []
+    (proxy [java.awt.Point] []
+      (setLocation [the-x the-y]
+        (set! (. this x) the-x)
+        (set! (. this y) the-y))))
+
 
 
   )

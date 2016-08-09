@@ -1,10 +1,18 @@
 (ns easy21.core
-  (:require [clojure.spec :as s]
+  (:require [clojure.core.matrix :as m]
+            [clojure.spec :as s]
             [clojure.spec.gen :as gen]
             [com.rpl.specter :refer [ALL END LAST] :as sr]
             [com.rpl.specter.macros :as srm]
             [easy21.action :as action]
-            [easy21.color :as color]))
+            [easy21.color :as color])
+  (:import org.jzy3d.analysis.AbstractAnalysis
+           org.jzy3d.chart.factories.AWTChartComponentFactory
+           org.jzy3d.maths.Range
+           [org.jzy3d.plot3d.builder Builder Mapper]
+           org.jzy3d.plot3d.builder.concrete.OrthonormalGrid
+           org.jzy3d.plot3d.primitives.Shape
+           org.jzy3d.plot3d.rendering.canvas.Quality))
 
 (declare bust?)
 
@@ -276,6 +284,42 @@
   (if (>= (::player-sum observation) 17)
     [nil ::action/stick]
     [nil ::action/hit]))
+
+(defn v-from-q [q]
+  (into {} (map #(vector (key %)
+                         (apply max (vals (val %))))
+                q)))
+
+(defn v-matrix [v]
+  (let [m (m/new-matrix 10 21)]
+    (reduce-kv (fn [matrix {:keys [::dealer-sum ::player-sum]} value]
+              (m/mset matrix (dec dealer-sum) (dec player-sum) value))
+            m
+            v)))
+
+;; Credits: http://stackoverflow.com/a/9090720/5091738
+(def double-ary-type (Class/forName "[D"))
+
+(defn make-mapper [v-matrix]
+  (proxy [Mapper] []
+    (f ([double-ary-ary] (proxy-super f double-ary-ary))
+      ([dealer-card player-sum]
+       (if (= (type dealer-card) double-ary-type)
+          (proxy-super f dealer-card player-sum)
+          (m/mget v-matrix (dec dealer-card) (dec player-sum)))))))
+
+(defn make-q-plot [mapper]
+  (proxy [AbstractAnalysis] []
+    (init []
+      (let [dealer-range (Range. 1 10)
+            player-range (Range. 1 21)
+            grid (OrthonormalGrid. dealer-range 2 player-range 2)
+            surface (Builder/buildOrthonormal grid mapper)
+
+            the-chart
+            (-> (AWTChartComponentFactory/chart Quality/Advanced "newt")
+                .getScene .getGraph (.add surface))]
+        (set! (. this chart) the-chart)))))
 
 (comment
   (iterate (stepper step think) [(init) 0 current-experience nil]))
