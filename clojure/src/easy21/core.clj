@@ -80,6 +80,15 @@
 
 (declare wrapup)
 
+(s/def ::timestep-vec (s/cat :state ::state
+                             :reward ::reward
+                             :experience ::experience
+                             :action ::action))
+
+(s/fdef stepper
+  :ret (s/fspec :args (s/cat :arg ::timestep-vec)
+                :ret ::timestep-vec))
+
 ;; The first timestep has an observation and the action decided based on that
 ;; observation, but the reward is 0. The algorithms don't look at that reward.
 ;; The last timestep has an observation and a reward, but no action. The return
@@ -87,7 +96,7 @@
 (defn stepper [step think]
   (fn complete-step [[state reward experience action]]
     (if (::done? state)
-      [state 0 (wrapup experience (::observation state) reward) nil]
+      [state 0 experience nil]
       (let [[new-experience new-action]
             (think experience (::observation state) reward)
 
@@ -95,9 +104,37 @@
             (step state new-action)]
         [new-state new-reward new-experience new-action]))))
 
+(s/def ::reset-state (s/and ::state
+                            #(not (::done? %))
+                            #(s/valid? ::black-card (::player-sum %))
+                            #(s/valid? ::black-card (::dealer-sum %))))
+(s/def ::fresh-experience (s/and ::experience
+                                 #(empty? (::episode %))))
+(s/def ::first-timestep-vec (s/cat :state ::reset-state
+                                   :reward zero?
+                                   :experience ::fresh-experience
+                                   :action nil?))
+
 (defn until-done [timesteps]
   (let [[not-done done] (split-with #(not (::done? (first %))) timesteps)]
-    (into (vec not-done) (take 2 done))))
+    (conj (vec not-done) (first done))))
+
+(s/fdef make-train-and-prep
+  :ret (s/fspec
+         :args (s/cat :arg ::first-timestep-vec)
+         :ret ::first-timestep-vec))
+
+(defn make-train-and-prep [reset init complete-step wrapup]
+  (fn train-and-prep [first-timestep-vec]
+    (let [episode
+          (->> first-timestep-vec
+               (iterate complete-step)
+               until-done)
+
+          [state reward experience _] (last episode)
+
+          experience (wrapup experience (::observation state) reward)]
+      [(reset) 0 experience nil])))
 
 (defn rand-number []
   (inc (rand-int 10)))
@@ -170,10 +207,15 @@
            (assoc-in [::policy observation] action)
            (assoc-in [::nseen-s observation] 1))
        action])
-    (if (rand-explore? n0 (get nseen-s observation))
-      [experience (rand-action)]
-      [(update-in experience [::nseen-s observation] inc)
-       (get-in experience [::policy observation])])))
+    [(update-in experience [::nseen-s observation] inc)
+     (if (rand-explore? n0 (get nseen-s observation))
+       (rand-action)
+       (get-in experience [::policy observation]))]))
+
+(s/fdef policy-think
+  :args (s/cat :experience ::experience :observation ::observation
+               :reward ::reward)
+  :ret (s/cat ::experience ::action))
 
 (defn policy-think [experience observation reward]
   (let [[experience action] (execute-e-policy experience observation)]
@@ -222,7 +264,7 @@
 
         ; Credits: https://clojuredocs.org/clojure.core/max-key#example-5490032de4b09260f767ca79
         new-policy
-        (into {} (map #(vector % (apply max-key val (get new-q %)))
+        (into {} (map #(vector % (first (apply max-key val (get new-q %))))
                       (keys policy)))]
     (-> experience
         (assoc ::episode [])
