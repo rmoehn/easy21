@@ -1,6 +1,8 @@
 (ns easy21.core
   (:require [clojure.spec :as s]
             [clojure.spec.gen :as gen]
+            [com.rpl.specter :refer [ALL END LAST] :as sr]
+            [com.rpl.specter.macros :as srm]
             [easy21.action :as action]
             [easy21.color :as color]))
 
@@ -38,7 +40,16 @@
 (s/def ::reward (s/int-in -1 2))
 (s/def ::done? boolean?)
 
-(s/def ::experience true)
+(s/def ::policy (s/map-of ::observation ::action))
+(s/def ::n0 integer?)
+(s/def ::nseen-s (s/map-of ::observation nat-int?))
+(s/def ::nseen-sa (s/map-of ::observation (s/map-of ::action nat-int?)))
+(s/def ::q (s/map-of ::observation (s/map-of ::action number?)))
+(s/def ::timestep (s/or :butlast (s/keys :req [::observation ::reward ::action])
+                        :last (s/keys :req [::observation ::reward])))
+(s/def ::episode (s/coll-of ::timestep :kind sequential?))
+(s/def ::experience (s/keys :req [::policy ::n0 ::nseen-s ::nseen-sa
+                                  ::episode ::q]))
 
 (s/fdef reset
   :args (s/cat)
@@ -62,20 +73,31 @@
                :reward ::reward)
   :ret (s/cat :new-experience ::experience :action ::action))
 
+(s/fdef wrapup
+  :args (s/cat :experience ::experience :observation ::observation
+               :reward ::reward)
+  :ret ::experience)
+
+(declare wrapup)
+
+;; The first timestep has an observation and the action decided based on that
+;; observation, but the reward is 0. The algorithms don't look at that reward.
+;; The last timestep has an observation and a reward, but no action. The return
+;; for the last timestep is undefined.
 (defn stepper [step think]
   (fn complete-step [[state reward experience action]]
     (if (::done? state)
-      [state 0 experience nil])
-    (let [[new-experience new-action]
-          (think experience (::observation state) reward)
+      [state 0 (wrapup experience (::observation state) reward) nil]
+      (let [[new-experience new-action]
+            (think experience (::observation state) reward)
 
-          [new-state new-reward]
-          (step state new-action)]
-      [new-state new-reward new-experience new-action])))
+            [new-state new-reward]
+            (step state new-action)]
+        [new-state new-reward new-experience new-action]))))
 
 (defn until-done [timesteps]
   (let [[not-done done] (split-with #(not (::done? (first %))) timesteps)]
-    (conj (vec not-done) (first done))))
+    (into (vec not-done) (take 2 done))))
 
 (defn rand-number []
   (inc (rand-int 10)))
@@ -129,48 +151,70 @@
 (defn init []
   {::policy {}
    ::n0 100
-   ::nseen {}
-   ::episode []})
+   ::nseen-s {}
+   ::nseen-sa {}
+   ::episode []
+   ::q {}})
 
 (defn rand-action []
   (rand-nth [::action/stick ::action/hit]))
 
-(defn rand-explore? [n0 nseen]
-  (< (rand-int (+ n0 nseen) n0))) ; true with probability n0 / (n0 + nseen)
+(defn rand-explore? [n0 nseen-s]
+  (< (rand-int (+ n0 nseen-s)) n0)) ; true with probability n0 / (n0 + nseen-s)
 
-(defn policy [{:keys [::policy ::n0 ::nseen] :as experience} observation]
-  (if (zero? (get nseen observation 0))
+(defn execute-e-policy [{:keys [::policy ::n0 ::nseen-s] :as experience}
+                        observation]
+  (if (zero? (get nseen-s observation 0))
     (let [action (rand-action)]
       [(-> experience
            (assoc-in [::policy observation] action)
-           (assoc-in [::nseen observation] 1))
+           (assoc-in [::nseen-s observation] 1))
        action])
-    (if (rand-explore? n0 (get nseen observation))
+    (if (rand-explore? n0 (get nseen-s observation))
       [experience (rand-action)]
-      [(update-in experience [::nseen observation] inc)
+      [(update-in experience [::nseen-s observation] inc)
        (get-in experience [::policy observation])])))
 
 (defn policy-think [experience observation reward]
-  (let [[experience action] (policy experience observation)]
-    [(update experience ::episode
-             #(conj % {::observation observation
-                       ::reward reward
-                       ::action action}))
+  (let [[experience action] (execute-e-policy experience observation)]
+    [(srm/setval [::episode END] [{::observation observation
+                                   ::reward reward
+                                   ::action action}]
+                 experience)
      action]))
 
-(defn wrapup [{:keys [::episode ::n-s-a ::q]}]
-  (let [g-t (->> episode
+(defn wrapup [{:keys [::policy ::episode ::nseen-sa ::q] :as experience}
+              observation reward]
+  (let [episode
+        (srm/setval [END] [{::observation observation ::reward reward}]
+                    episode)
+
+        g-t (->> episode
                  (map ::reward)
                  reverse
                  (reductions +)
-                 reverse)
+                 reverse
+                 rest)
         timesteps-with-g-t (map #(assoc %1 ::g-t %2) episode g-t)
 
+        obs-action-freqs
+        (->> episode
+             butlast
+             (map #(dissoc % ::reward))
+             frequencies)
+
+        new-nseen-sa
+        (reduce-kv (fn [nseen-sa {:keys [::observation ::action]} nseen]
+                     (update-in nseen-sa [observation action]
+                                #(+ (or % 0) nseen)))
+                   nseen-sa
+                   obs-action-freqs)
+
         new-q
-        (reduce (fn [{:keys [::observation ::action ::g-t]} q]
-                  (update-in q [observation timestep]
+        (reduce (fn [q {:keys [::observation ::action ::g-t]}]
+                  (update-in q [observation action]
                              #(let [old-q (or % 0)]
-                                (+ old-q (* (/ 1 (get-in n-s-a
+                                (+ old-q (* (/ 1 (get-in new-nseen-sa
                                                          [observation action]))
                                             (- g-t old-q))))))
                 q
@@ -178,8 +222,13 @@
 
         ; Credits: https://clojuredocs.org/clojure.core/max-key#example-5490032de4b09260f767ca79
         new-policy
-        (into {} (map #(vec % (apply max-key val (get q %)))
-                      policy))]))
+        (into {} (map #(vector % (apply max-key val (get new-q %)))
+                      (keys policy)))]
+    (-> experience
+        (assoc ::episode [])
+        (assoc ::nseen-sa new-nseen-sa)
+        (assoc ::policy new-policy)
+        (assoc ::q new-q))))
 
 (defn dealer-think [_ observation _]
   (if (>= (::player-sum observation) 17)
