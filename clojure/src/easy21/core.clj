@@ -6,13 +6,7 @@
             [com.rpl.specter.macros :as srm]
             [easy21.action :as action]
             [easy21.color :as color])
-  (:import org.jzy3d.analysis.AbstractAnalysis
-           org.jzy3d.chart.factories.AWTChartComponentFactory
-           org.jzy3d.maths.Range
-           [org.jzy3d.plot3d.builder Builder Mapper]
-           org.jzy3d.plot3d.builder.concrete.OrthonormalGrid
-           org.jzy3d.plot3d.primitives.Shape
-           org.jzy3d.plot3d.rendering.canvas.Quality))
+  (:import org.jzy3d.plot3d.builder.Mapper))
 
 (declare bust?)
 
@@ -307,19 +301,6 @@
        (if (= (type dealer-card) double-ary-type)
           (proxy-super f dealer-card player-sum)
           (m/mget v-matrix (dec dealer-card) (dec player-sum)))))))
-
-(defn make-q-plot [mapper]
-  (proxy [AbstractAnalysis] []
-    (init []
-      (let [dealer-range (Range. 1 10)
-            player-range (Range. 1 21)
-            grid (OrthonormalGrid. dealer-range 2 player-range 2)
-            surface (Builder/buildOrthonormal grid mapper)
-
-            the-chart
-            (-> (AWTChartComponentFactory/chart Quality/Advanced "newt")
-                .getScene .getGraph (.add surface))]
-        (set! (. this chart) the-chart)))))
 
 (comment
   (iterate (stepper step think) [(init) 0 current-experience nil]))
