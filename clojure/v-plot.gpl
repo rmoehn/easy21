@@ -1,0 +1,10 @@
+set xrange [0:20]
+set yrange [0:9]
+
+set grid
+set hidden3d
+
+set term jpeg
+set view 70,290
+set output "output.jpg"
+splot "data.csv" matrix with lines notitle

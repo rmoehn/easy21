@@ -5,8 +5,7 @@
             [com.rpl.specter :refer [ALL END LAST] :as sr]
             [com.rpl.specter.macros :as srm]
             [easy21.action :as action]
-            [easy21.color :as color])
-  (:import org.jzy3d.plot3d.builder.Mapper))
+            [easy21.color :as color]))
 
 (declare bust?)
 
@@ -290,17 +289,6 @@
               (m/mset matrix (dec dealer-sum) (dec player-sum) value))
             m
             v)))
-
-;; Credits: http://stackoverflow.com/a/9090720/5091738
-(def double-ary-type (Class/forName "[D"))
-
-(defn make-mapper [v-matrix]
-  (proxy [Mapper] []
-    (f ([double-ary-ary] (proxy-super f double-ary-ary))
-      ([dealer-card player-sum]
-       (if (= (type dealer-card) double-ary-type)
-          (proxy-super f dealer-card player-sum)
-          (m/mget v-matrix (dec dealer-card) (dec player-sum)))))))
 
 (comment
   (iterate (stepper step think) [(init) 0 current-experience nil]))
