@@ -1,5 +1,6 @@
 (ns easy21.core
   (:require [clojure.core.matrix :as m]
+            [clojure.data :as data]
             [clojure.spec :as s]
             [clojure.spec.gen :as gen]
             [com.rpl.specter :refer [ALL END LAST] :as sr]
@@ -42,15 +43,22 @@
 (s/def ::done? boolean?)
 
 (s/def ::policy (s/map-of ::observation ::action))
-(s/def ::n0 integer?)
-(s/def ::nseen-s (s/map-of ::observation nat-int?))
-(s/def ::nseen-sa (s/map-of ::observation (s/map-of ::action nat-int?)))
+(s/def ::nonzero-nat-int (s/and nat-int? pos?))
+(s/def ::n0 ::nonzero-nat-int)
+(s/def ::nseen-s (s/map-of ::observation ::nonzero-nat-int))
+(s/def ::nseen-sa (s/map-of ::observation
+                            (s/map-of ::action ::nonzero-nat-int)))
 (s/def ::q (s/map-of ::observation (s/map-of ::action number?)))
 (s/def ::timestep (s/or :butlast (s/keys :req [::observation ::reward ::action])
                         :last (s/keys :req [::observation ::reward])))
 (s/def ::episode (s/coll-of ::timestep :kind sequential?))
-(s/def ::experience (s/keys :req [::policy ::n0 ::nseen-s ::nseen-sa
-                                  ::episode ::q]))
+(s/def ::experience
+  (s/and (s/keys :req [::policy ::n0 ::nseen-s ::nseen-sa
+                       ::episode ::q])
+         (fn policy-iff-seen [{:keys [::policy ::nseen-s]}]
+           (let [all-states (into (keys policy) (keys nseen-s))]
+             (and (every? some? (map #(get policy %) all-states))
+                  (every? some? (map #(get nseen-s %) all-states)))))))
 
 (s/fdef reset
   :args (s/cat)
@@ -199,6 +207,35 @@
 
 (defn rand-explore? [n0 nseen-s]
   (< (rand-int (+ n0 nseen-s)) n0)) ; true with probability n0 / (n0 + nseen-s)
+
+(s/fdef execute-e-policy
+  :args (s/cat :experience ::experience :observation ::observation)
+  :ret (s/cat :experience ::experience :action ::action)
+  :fn (s/and
+        (fn unchanged-parts [{{arg-experience :experience} :args
+                              {ret-experience :experience} :ret}]
+          (let [these [::n0 ::nseen-sa ::episode ::q]]
+           (= (select-keys arg-experience these)
+              (select-keys ret-experience these))))
+
+        (fn one-state-frequency-increment
+          [{{{arg-nseen-s ::nseen-s} :experience} :args
+            {{ret-nseen-s ::nseen-s} :experience} :ret}]
+          (let [[in-arg in-ret _] (data/diff arg-nseen-s ret-nseen-s)]
+            (and (implies (empty? in-arg) (= 1 (first (vals in-ret))))
+                 (implies (seq in-arg)
+                          (and (= 1 (count in-arg) (count in-ret))
+                               (= 1 (- (first (vals in-ret))
+                                       (first (vals in-arg)))))))))
+
+        (fn about-policy-updates [{{{arg-policy :policy} :experience
+                                    :keys [observation]} :args
+                                   {{ret-policy :policy} :experience
+                                    :keys [action]} :ret}]
+          (let [[in-arg in-ret _] (data/diff arg-policy ret-policy)]
+            (and (empty? in-arg)
+                 (implies (seq in-ret)
+                          (= action (first (vals in-ret)))))))))
 
 (defn execute-e-policy [{:keys [::policy ::n0 ::nseen-s] :as experience}
                         observation]

@@ -1,5 +1,6 @@
 (ns user
   (:require [clojure.core.matrix :as m]
+            [clojure.data :refer [diff]]
             [clojure.java.io :as io]
             [clojure.pprint :refer [pprint]]
             [clojure.repl :refer [pst doc find-doc]]
@@ -16,6 +17,8 @@
 
   (reset)
 
+  (diff {:a 1 :b 1} {:a 1 :b 2})
+
   (s/conform (s/cat :new-state keyword?) [:bla])
 
   (refresh)
@@ -29,14 +32,14 @@
 
   (refresh)
 
-  ;(stest/instrument (stest/instrumentable-syms))
+  (stest/instrument (stest/instrumentable-syms))
   (let [complete-step (stepper step policy-think)
         train-and-prep (make-train-and-prep reset init complete-step wrapup)
 
         some-timestep-vector
         (->> [(reset) 0 (init) nil]
              (iterate train-and-prep)
-             (drop 100000)
+             (drop 100)
              first)
 
         experience (nth some-timestep-vector 2)
@@ -61,23 +64,14 @@
 
   (srm/setval [::episode END] [{:b :bu}] experience)
 
-  (srm/transform
-    #()
-    {:a {:b 4}
-     :c {:d 5}})
+  (require '[easy21.core-test :as ct] :reload)
+  (stest/check `execute-e-policy
+               {:get {::observation ct/inplay-observation-gen}})
 
-  (defn make-point []
-    (proxy [java.awt.Point] []
-      (setLocation [the-x the-y]
-        (set! (. this x) the-x)
-        (set! (. this y) the-y))))
 
-  (def point (make-point))
 
-  (.setLocation point 4 5)
 
-  (str ^java.awt.Point point)
+  (gen/sample ct/inplay-observation-gen 5)
 
-  cast
 
   )
