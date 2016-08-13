@@ -3,7 +3,6 @@
 from __future__ import unicode_literals
 
 import itertools
-import math
 import random
 
 import numpy as np
@@ -94,16 +93,17 @@ def hit_step(state):
                   is_bust(new_player_sum)),
             -1 if is_bust(new_player_sum) else 0)
 
+def signum(n):
+    return -1 if n < 0 else 1 if n > 0 else 0
 
 def stick_step(state):
     final_dealer_sum \
-        = itertools.dropwhile(lambda s: not (is_bust(s) or s <= 17),
+        = itertools.dropwhile(lambda s: not is_bust(s) or s < 17,
               iterate(lambda s: s + rand_card(),
                       state.observation.dealer_sum)) \
               .next()
     reward = 1 if is_bust(final_dealer_sum) \
-               else int(math.copysign(1,
-                            state.observation.player_sum - final_dealer_sum))
+               else signum(state.observation.player_sum - final_dealer_sum)
 
     return (State(state.observation.set(dealer_sum=final_dealer_sum),
                   True),
@@ -199,4 +199,9 @@ def think(experience, observation, reward, done=False): # Nasty and mutating.
 
 def wrapup(experience, observation, reward):
     experience, _ = think(experience, observation, reward, done=True)
-    return experience.set(prev_observation=None, prev_action=None)
+    return experience.set(prev_observation=None, prev_action=None,
+                          E=np.zeros((10, 21, 2)))
+
+
+def V_from_Q(Q):
+    return np.amax(Q, axis=2)
