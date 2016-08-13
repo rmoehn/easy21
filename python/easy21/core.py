@@ -133,8 +133,7 @@ def init(lmbda):
                       N0=100,
                       Ns=np.zeros((10, 21), np.int64),
                       Nsa=np.zeros((10, 21, 2), np.int64),
-                      pi=np.array([randlist(0, 1, 21) for _ in xrange(10)],
-                                  np.byte),
+                      pi=np.zeros((10, 21), np.byte),
                       lmbda=lmbda,
                       prev_observation=None,
                       prev_action=None)
