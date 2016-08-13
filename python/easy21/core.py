@@ -23,7 +23,7 @@ LTimestep = pyrsistent.immutable('observation, reward, action',
                 name='ATimestep')
 
 Experience = pyrsistent.immutable(
-                 'Q, E, N0, Ns, Nsa, p, prev_action, prev_observation')
+                 'Q, E, N0, Ns, Nsa, pi, lmbda, prev_action, prev_observation')
 
 class Action(object): # pylint: disable=too-few-public-methods
     STICK = 0
@@ -50,6 +50,21 @@ def driver(step, think): # pylint: disable=redefined-outer-name
         return DTimestep(new_state, new_reward, new_experience, new_action)
 
     return next_dtimestep
+
+
+# pylint: disable=redefined-outer-name
+def make_train_and_prep(reset, next_dtimestep, wrapup):
+    def train_and_prep(first_dtimestep):
+        last_dtimestep = itertools.dropwhile(lambda dt: not dt.state.done,
+                             iterate(next_dtimestep, first_dtimestep))\
+                             .next()
+        experience = wrapup(last_dtimestep.experience,
+                            last_dtimestep.state.observation,
+                            last_dtimestep.reward)
+        return DTimestep(reset(), 0, experience, None)
+
+    return train_and_prep
+
 
 
 def is_bust(card_sum):
@@ -108,15 +123,18 @@ def reset():
     return State(Observation(rand_number(), rand_number()), False)
 
 
+def randlist(a, b, n):
+    return [random.randint(a, b) for _ in xrange(n)]
+
 # Number of states: 21 player sums x 10 initial dealer cards
 def init(lmbda):
     return Experience(Q=np.zeros((10, 21, 2)),
-                      E=np.zeros((10, 21)),
+                      E=np.zeros((10, 21, 2)),
                       N0=100,
-                      Ns=np.zeros((10, 21)),
-                      Nsa=np.zeros((10, 21, 2)),
-                      pi=np.array([random.sample([0, 1], 21)
-                                  for _ in xrange(10)]),
+                      Ns=np.zeros((10, 21), np.int64),
+                      Nsa=np.zeros((10, 21, 2), np.int64),
+                      pi=np.array([randlist(0, 1, 21) for _ in xrange(10)],
+                                  np.byte),
                       lmbda=lmbda,
                       prev_observation=None,
                       prev_action=None)
@@ -124,9 +142,9 @@ def init(lmbda):
 
 def is_rand_explore(experience, observation):
     return random.randint(1, experience.N0
-                             + experience.Ns[observation.dealer_sum,
-                                             observation.player_sum]) \
-           <= random.N0
+                             + experience.Ns[observation.dealer_sum - 1,
+                                             observation.player_sum - 1]) \
+           <= experience.N0
 
 
 def choose_action(experience, observation):
@@ -137,37 +155,44 @@ def choose_action(experience, observation):
 
 
 # Follows Sutton and Barto, book2015oct.pdf, p. 162
-def think(experience, observation, reward): # Nasty and mutating.
+def think(experience, observation, reward, done=False): # Nasty and mutating.
     action = choose_action(experience, observation)
-    experience.Ns[observation.dealer_sum, observation.player_sum] += 1
+    experience.Ns[observation.dealer_sum - 1, observation.player_sum - 1] += 1
         # In this way I interpret »number of times that state s has been
         # visited« from the exercise text as "the number of times we've seen it
         # before, excluding this time".
 
     if experience.prev_observation: # Except for first timestep.
-        delta  = reward + experience.Q[observation.dealer_sum,
-                                       observation.player_sum,
-                                       action] \
-                        - experience.Q[experience.prev_observation.dealer_sum,
-                                       experience.prev_observation.player_sum,
+        Qnext = experience.Q[observation.dealer_sum - 1,
+                             observation.player_sum - 1,
+                             action] \
+                    if not done else 0
+
+        delta  = reward + Qnext \
+                        - experience.Q[experience.prev_observation.dealer_sum-1,
+                                       experience.prev_observation.player_sum-1,
                                        experience.prev_action]
 
-        experience.E[experience.prev_observation.dealer_sum,
-                     experience.prev_observation.player_sum,
+        experience.E[experience.prev_observation.dealer_sum - 1,
+                     experience.prev_observation.player_sum - 1,
                      experience.prev_action] += 1
 
-        experience.Nsa[experience.prev_observation.dealer_sum,
-                       experience.prev_observation.player_sum,
+        experience.Nsa[experience.prev_observation.dealer_sum - 1,
+                       experience.prev_observation.player_sum - 1,
                        experience.prev_action] += 1
 
-        alpha = 1.0 / experience.Nsa[experience.prev_observation.dealer_sum,
-                                     experience.prev_observation.player_sum,
+        alpha = 1.0 / experience.Nsa[experience.prev_observation.dealer_sum - 1,
+                                     experience.prev_observation.player_sum - 1,
                                      experience.prev_action]
 
-        experience.Q += experience.E * alpha * delta
+        experience.Q.__iadd__(experience.E * alpha * delta)
 
-        experience.E *= experience.lmbda
+        experience.E.__imul__(experience.lmbda)
 
     return experience.set(prev_observation=observation, prev_action=action), \
            action
         # The other fields refer to nparrays that have been mutated.
+
+
+def wrapup(experience, observation, reward):
+    return think(experience, observation, reward, done=True)
