@@ -98,7 +98,7 @@ def signum(n):
 
 def stick_step(state):
     final_dealer_sum \
-        = itertools.dropwhile(lambda s: not is_bust(s) or s < 17,
+        = itertools.dropwhile(lambda s: (not is_bust(s)) and s < 17,
               iterate(lambda s: s + rand_card(),
                       state.observation.dealer_sum)) \
               .next()
