@@ -23,7 +23,7 @@ LTimestep = pyrsistent.immutable('observation, reward, action',
                 name='ATimestep')
 
 Experience = pyrsistent.immutable(
-                 'Q, E, N0, Ns, Nsa, pi, lmbda, prev_action, prev_observation')
+                 'Q, E, N0, Ns, Nsa, lmbda, prev_action, prev_observation')
 
 class Action(object): # pylint: disable=too-few-public-methods
     STICK = 0
@@ -133,7 +133,6 @@ def init(lmbda):
                       N0=100,
                       Ns=np.zeros((10, 21), np.int64),
                       Nsa=np.zeros((10, 21, 2), np.int64),
-                      pi=np.zeros((10, 21), np.byte),
                       lmbda=lmbda,
                       prev_observation=None,
                       prev_action=None)
@@ -150,7 +149,8 @@ def choose_action(experience, observation):
     if is_rand_explore(experience, observation):
         return rand_action()
     else:
-        return experience.pi[observation.dealer_sum, observation.player_sum]
+        return np.argmax(experience.Q[observation.dealer_sum - 1,
+                                      observation.player_sum - 1])
 
 
 # Follows Sutton and Barto, book2015oct.pdf, p. 162
