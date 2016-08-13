@@ -102,8 +102,8 @@ def stick_step(state):
                       state.observation.dealer_sum)) \
               .next()
     reward = 1 if is_bust(final_dealer_sum) \
-               else math.copysign(1,
-                        state.observation.player_sum - final_dealer_sum)
+               else int(math.copysign(1,
+                            state.observation.player_sum - final_dealer_sum))
 
     return (State(state.observation.set(dealer_sum=final_dealer_sum),
                   True),
@@ -156,18 +156,22 @@ def choose_action(experience, observation):
 
 # Follows Sutton and Barto, book2015oct.pdf, p. 162
 def think(experience, observation, reward, done=False): # Nasty and mutating.
-    action = choose_action(experience, observation)
-    experience.Ns[observation.dealer_sum - 1, observation.player_sum - 1] += 1
-        # In this way I interpret »number of times that state s has been
-        # visited« from the exercise text as "the number of times we've seen it
-        # before, excluding this time".
+    if not done:
+        action = choose_action(experience, observation)
+        experience.Ns[observation.dealer_sum - 1, observation.player_sum - 1] \
+            += 1
+            # In this way I interpret »number of times that state s has been
+            # visited« from the exercise text as "the number of times we've seen
+            # it before, excluding this time".
+        Qnext  = experience.Q[observation.dealer_sum - 1,
+                              observation.player_sum - 1,
+                              action]
+    else:
+        action = None
+        Qnext  = 0
+
 
     if experience.prev_observation: # Except for first timestep.
-        Qnext = experience.Q[observation.dealer_sum - 1,
-                             observation.player_sum - 1,
-                             action] \
-                    if not done else 0
-
         delta  = reward + Qnext \
                         - experience.Q[experience.prev_observation.dealer_sum-1,
                                        experience.prev_observation.player_sum-1,
@@ -195,4 +199,5 @@ def think(experience, observation, reward, done=False): # Nasty and mutating.
 
 
 def wrapup(experience, observation, reward):
-    return think(experience, observation, reward, done=True)
+    experience, _ = think(experience, observation, reward, done=True)
+    return experience.set(prev_observation=None, prev_action=None)
