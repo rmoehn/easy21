@@ -59,16 +59,16 @@
         ;    v-from-q
         ;    v-matrix)
 
-        n 100000
+        n 50000
         experiences (r/map #(get % 2) (r/take n timestep-vectors))
-
-        _ (println "Finished training.")
 
         v-matrices
         (->> experiences
              (r/map ::easy21/q)
              (r/map v-from-q)
              (r/map v-matrix))
+
+        _ (println "Finished training.")
 
         ; Credits: https://math.stackexchange.com/questions/507742/distance-similarity-between-two-matrices
         differences
@@ -80,11 +80,15 @@
              (into [])
              )
 
+        the-v-matrix
+        (->> v-matrices
+             (into [])
+             last)
         ]
     (incanter/view (charts/line-chart (range (count differences)) differences))
-    #_(spit "data.csv" (string/join \newline
+    (spit "data.csv" (string/join \newline
                                   (map #(string/join " " %)
-                                       (m/emap double the-v-matrx)))))
+                                       (m/emap double the-v-matrix)))))
 
 
   (require '[com.rpl.specter :refer [ALL END LAST] :as sr]
