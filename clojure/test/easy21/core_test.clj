@@ -18,7 +18,7 @@
                                  (s/gen ::nut/action)
                                  (s/gen ::nut/nonzero-nat-int)))
             (fn [os]
-              (gen/hash-map ::policy (gen/fmap (fn [observation action nseen}
+              (gen/hash-map ::policy (gen/fmap (fn [observation action nseen]
                                                  )))
 
 

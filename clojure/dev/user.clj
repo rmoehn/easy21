@@ -1,5 +1,7 @@
 (ns user
   (:require [clojure.core.matrix :as m]
+            [clojure.core.matrix.linear :as linear]
+            [clojure.core.reducers :as r]
             [clojure.data :refer [diff]]
             [clojure.java.io :as io]
             [clojure.pprint :refer [pprint]]
@@ -9,7 +11,11 @@
             [clojure.spec.test :as stest]
             [clojure.string :as string]
             [clojure.tools.namespace.repl :refer [refresh]]
-            [easy21.core :as easy21 :refer :all]))
+            [easy21.core :as easy21 :refer :all]
+            [incanter.core :as incanter]
+            [incanter.charts :as charts]))
+
+(m/set-current-implementation :vectorz)
 
 (comment
 
@@ -36,20 +42,47 @@
   (let [complete-step (stepper step policy-think)
         train-and-prep (make-train-and-prep reset init complete-step wrapup)
 
-        some-timestep-vector
+        timestep-vectors
         (->> [(reset) 0 (init) nil]
-             (iterate train-and-prep)
-             (drop 100)
-             first)
+             (iterate train-and-prep))
 
-        experience (nth some-timestep-vector 2)
+        ;some-timestep-vector
+        ;(->> timestep-vectors
+        ;     (drop 100)
+        ;     first)
 
-        the-v-matrx
-        (-> experience
-            ::easy21/q
-            v-from-q
-            v-matrix)]
-    (spit "data.csv" (string/join \newline
+        ;experience (nth some-timestep-vector 2)
+
+        ;the-v-matrx
+        ;(-> experience
+        ;    ::easy21/q
+        ;    v-from-q
+        ;    v-matrix)
+
+        n 100000
+        experiences (r/map #(get % 2) (r/take n timestep-vectors))
+
+        _ (println "Finished training.")
+
+        v-matrices
+        (->> experiences
+             (r/map ::easy21/q)
+             (r/map v-from-q)
+             (r/map v-matrix))
+
+        ; Credits: https://math.stackexchange.com/questions/507742/distance-similarity-between-two-matrices
+        differences
+        (->> (partition 2 1 (into [] v-matrices))
+             (r/map #(apply m/sub %))
+             (r/map linear/norm)
+             ;(r/partition 10)
+             ;(r/map #(reduce + %))
+             (into [])
+             )
+
+        ]
+    (incanter/view (charts/line-chart (range (count differences)) differences))
+    #_(spit "data.csv" (string/join \newline
                                   (map #(string/join " " %)
                                        (m/emap double the-v-matrx)))))
 

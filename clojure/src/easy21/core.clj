@@ -133,6 +133,7 @@
          :args (s/cat :arg ::first-timestep-vec)
          :ret ::first-timestep-vec))
 
+;; TODO: Remove init argument. It's not used. (RM 2016-08-1)
 (defn make-train-and-prep [reset init complete-step wrapup]
   (fn train-and-prep [first-timestep-vec]
     (let [episode
@@ -320,12 +321,13 @@
                          (apply max (vals (val %))))
                 q)))
 
+(m/set-current-implementation :vectorz)
+
 (defn v-matrix [v]
-  (let [m (m/new-matrix 10 21)]
-    (reduce-kv (fn [matrix {:keys [::dealer-sum ::player-sum]} value]
-              (m/mset matrix (dec dealer-sum) (dec player-sum) value))
-            m
-            v)))
+  (let [matrix (m/new-matrix 10 21)]
+    (doseq [[{:keys [::dealer-sum ::player-sum]} value] v]
+      (m/mset! matrix (dec dealer-sum) (dec player-sum) value))
+    matrix))
 
 (comment
   (iterate (stepper step think) [(init) 0 current-experience nil]))
