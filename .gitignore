@@ -1,0 +1,3 @@
+*.pyc
+clojure/lib
+clojure/repo
