@@ -8,6 +8,25 @@ import matplotlib.pyplot as pyplot
 next_dtimestep = driver(step, think)
 train_and_prep = make_train_and_prep(reset, next_dtimestep, wrapup)
 
+# pylint: disable=redefined-outer-name
+def train(n_episodes, lmbda):
+    dtimestep = DTimestep(reset(), 0, init(lmbda), None)
+    for _ in xrange(n_episodes):
+        dtimestep = train_and_prep(dtimestep)
+
+    return V_from_Q(dtimestep.experience.Q)
+
+Vs = np.array([train(1000, lmbdax10 * 0.1) for lmbdax10 in xrange(0, 11)])
+
+monte_carlo_V = np.loadtxt('../clojure/data.csv')
+
+monte_carlo_V
+
+msq_errors = np.sum((Vs - monte_carlo_V) ** 2, axis=(1, 2))
+
+pyplot.plot(msq_errors)
+pyplot.show()
+
 n = 100000
 Qs = np.empty((n, 10, 21, 2))
 dtimestep = DTimestep(reset(), 0, init(0.8), None)
@@ -42,21 +61,3 @@ surface = axes.plot_wireframe(Y, X, V, rstride=1,
 pyplot.subplot(212)
 pyplot.plot(norms)
 pyplot.show(block=False)
-
-A = np.array([
-    [[[3, 4],  [2, 8],  [1, 7]],
-     [[6, 12], [5, 11], [4, 10]]],
-    [[[12, 7], [11, 8], [10, 9]],
-     [[3, 4],  [2, 5],  [7, 6]]]])
-
-np.amax(A, axis=3)
-
-A[1] - A[0]
-
-np.diff(np.array([
-    [[[3, 4],  [2, 8],  [1, 7]],
-     [[6, 12], [5, 11], [4, 10]]],
-    [[[12, 7], [11, 8], [10, 9]],
-     [[3, 4],  [2, 5],  [7, 6]]]]),
-    axis=0)
-
