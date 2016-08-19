@@ -197,7 +197,7 @@
 
 (defn init []
   {::policy {}
-   ::n0 0.95
+   ::n0 100
    ::nseen-s {}
    ::nseen-sa {}
    ::episode []
@@ -207,7 +207,7 @@
   (rand-nth [::action/stick ::action/hit]))
 
 (defn rand-explore? [n0 nseen-s]
-  (empty? (random-sample (- 1 (Math/pow n0 nseen-s)) [1])))
+  (empty? (random-sample (- 1 (/ n0 (+ n0 nseen-s))) [1])))
 
 (s/fdef execute-e-policy
   :args (s/cat :experience ::experience :observation ::observation)

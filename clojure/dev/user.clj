@@ -39,56 +39,58 @@
   (refresh)
 
   (stest/instrument (stest/instrumentable-syms))
-  (let [complete-step (stepper step policy-think)
+  (time (let [complete-step (stepper step policy-think)
         train-and-prep (make-train-and-prep reset init complete-step wrapup)
 
         timestep-vectors
         (->> [(reset) 0 (init) nil]
              (iterate train-and-prep))
 
-        ;some-timestep-vector
-        ;(->> timestep-vectors
-        ;     (drop 100)
-        ;     first)
+        n 1000000
 
-        ;experience (nth some-timestep-vector 2)
+        some-timestep-vector
+        (->> timestep-vectors
+             (drop n)
+             first)
 
-        ;the-v-matrx
-        ;(-> experience
-        ;    ::easy21/q
-        ;    v-from-q
-        ;    v-matrix)
-
-        n 50000
-        experiences (r/map #(get % 2) (r/take n timestep-vectors))
-
-        v-matrices
-        (->> experiences
-             (r/map ::easy21/q)
-             (r/map v-from-q)
-             (r/map v-matrix))
-
-        _ (println "Finished training.")
-
-        ; Credits: https://math.stackexchange.com/questions/507742/distance-similarity-between-two-matrices
-        differences
-        (->> (partition 2 1 (into [] v-matrices))
-             (r/map #(apply m/sub %))
-             (r/map linear/norm)
-             ;(r/partition 10)
-             ;(r/map #(reduce + %))
-             (into [])
-             )
+        experience (nth some-timestep-vector 2)
 
         the-v-matrix
-        (->> v-matrices
-             (into [])
-             last)
+        (-> experience
+            ::easy21/q
+            v-from-q
+            v-matrix)
+
+
+        ;experiences (r/map #(get % 2) (r/take n timestep-vectors))
+
+        ;v-matrices
+        ;(->> experiences
+        ;     (r/map ::easy21/q)
+        ;     (r/map v-from-q)
+        ;     (r/map v-matrix))
+
+        ;_ (println "Finished training.")
+
+        ;; Credits: https://math.stackexchange.com/questions/507742/distance-similarity-between-two-matrices
+        ;differences
+        ;(->> (partition 2 1 (into [] v-matrices))
+        ;     (r/map #(apply m/sub %))
+        ;     (r/map linear/norm)
+        ;     ;(r/partition 10)
+        ;     ;(r/map #(reduce + %))
+        ;     (into [])
+        ;     )
+
+        ;the-v-matrix
+        ;(->> v-matrices
+        ;     (into [])
+        ;     last)
         ]
-    (incanter/view (charts/line-chart (range (count differences)) differences))
+    ;(incanter/view (charts/line-chart (range (count differences)) differences))
     (spit "data.csv" (string/join \newline
                                   (map #(string/join " " %)
-                                       (m/emap double the-v-matrix)))))
+                                       (m/emap double the-v-matrix))))))
 
 
   (require '[com.rpl.specter :refer [ALL END LAST] :as sr]
