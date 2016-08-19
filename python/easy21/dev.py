@@ -20,19 +20,22 @@ Vs = np.array([train(1000, lmbdax10 * 0.1) for lmbdax10 in xrange(0, 11)])
 
 monte_carlo_V = np.loadtxt('../clojure/data.csv')
 
-monte_carlo_V
-
 msq_errors = np.sum((Vs - monte_carlo_V) ** 2, axis=(1, 2))
 
 pyplot.plot(msq_errors)
 pyplot.show()
 
-n = 100000
+n = 10000
 Qs = np.empty((n, 10, 21, 2))
-dtimestep = DTimestep(reset(), 0, init(0.8), None)
+dtimestep = DTimestep(reset(), 0, init(0.2), None)
 for i in xrange(n):
     dtimestep = train_and_prep(dtimestep)
     Qs[i] = np.copy(dtimestep.experience.Q)
+
+Vs_per_dt = np.amax(Qs, axis=3)
+msq_errors_per_dt = np.sum((Vs_per_dt - monte_carlo_V) ** 2, axis=(1,2))
+pyplot.plot(msq_errors_per_dt)
+pyplot.show()
 
 #next(itertools.islice(first_timestep_vecs, n, n), None)
 #final_Q = first_timestep_vecs.next().experience.Q
