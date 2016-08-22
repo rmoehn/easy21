@@ -97,9 +97,11 @@ def think(e, o, r, done=False):
         p_feat = feature[e.p_obs.dealer_sum - 1, e.p_obs.player_sum - 1,
                          e.p_act]
         Qcur  = p_feat.dot(e.theta)
-        delta = r + Qnext - Qcur
+        delta = Qcur - (r + Qnext) # Yes, in the gradient it's inverted.
         e.E[e.p_obs.dealer_sum - 1, e.p_obs.player_sum - 1, e.p_act] += 1
 
+        # Note: Eligibility traces could be done slightly more succinctly by
+        # scaling the feature vectors themselves. See Silver slides.
         elig = e.E[e.p_obs.dealer_sum - 1, e.p_obs.player_sum - 1, e.p_act]
         e.theta.__isub__(e.alpha * delta * elig * p_feat)
 
@@ -110,7 +112,7 @@ def think(e, o, r, done=False):
 
 def wrapup(e, o, r):
     e, _ = think(e, o, r, done=True)
-    return e.set(p_obs=None, p_act=None)
+    return e.set(p_obs=None, p_act=None, E=np.zeros((10, 21, 2)))
 
 
 def Q_from_theta(theta):
