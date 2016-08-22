@@ -65,7 +65,6 @@ def make_train_and_prep(reset, next_dtimestep, wrapup):
     return train_and_prep
 
 
-
 def is_bust(card_sum):
     return not 1 <= card_sum <= 21
 

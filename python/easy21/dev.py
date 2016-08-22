@@ -29,8 +29,6 @@ def train_linfa(n_episodes, lmbda):
     for _ in xrange(n_episodes):
         dtimestep = train_and_prep_linfa(dtimestep)
 
-    print dtimestep.experience.theta
-
     return V_from_Q(linfa.Q_from_theta(dtimestep.experience.theta))
 
 
@@ -40,6 +38,16 @@ def train_Qs(n_episodes, lmbda):
     for i in xrange(n_episodes):
         dtimestep = train_and_prep(dtimestep)
         Qs[i] = np.copy(dtimestep.experience.Q)
+
+    return Qs
+
+
+def train_Qs_linfa(n_episodes, lmbda):
+    Qs = np.empty((n_episodes, 10, 21, 2))
+    dtimestep = DTimestep(reset(), 0, linfa.init(lmbda), None)
+    for i in xrange(n_episodes):
+        dtimestep = train_and_prep_linfa(dtimestep)
+        Qs[i] = linfa.Q_from_theta(dtimestep.experience.theta)
 
     return Qs
 
@@ -61,10 +69,12 @@ def plot_msq_errors(train, V, n_episodes):
     pyplot.plot(msq_errors)
     pyplot.show()
 
-#Vs_per_dt = np.amax(Qs, axis=3)
-#msq_errors_per_dt = np.sum((Vs_per_dt - monte_carlo_V) ** 2, axis=(1,2))
-#pyplot.plot(msq_errors_per_dt)
-#pyplot.show()
+
+def plot_learning_rate(V, Qs):
+    Vs_per_dt = np.amax(Qs, axis=3)
+    msq_errors_per_dt = np.sum((Vs_per_dt - V) ** 2, axis=(1,2))
+    pyplot.plot(msq_errors_per_dt)
+    pyplot.show()
 #
 ##next(itertools.islice(first_timestep_vecs, n, n), None)
 ##final_Q = first_timestep_vecs.next().experience.Q
