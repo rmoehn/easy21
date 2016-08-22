@@ -11,12 +11,12 @@ LinfaExperience = pyrsistent.immutable(
                     'theta, E, N0, epsi, alpha, lmbda, p_obs, p_act')
 
 
-def init(lmbda):
+def init(lmbda, alpha):
     return LinfaExperience(theta=np.zeros((10)),
                            E=np.zeros((10, 21, 2)), # Same indices as feature map
                            N0=100,
                            epsi=0.05,
-                           alpha=0.01,
+                           alpha=alpha,
                            lmbda=lmbda,
                            p_obs=None, # p … previous
                            p_act=None)

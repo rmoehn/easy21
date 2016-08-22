@@ -24,8 +24,8 @@ def train(n_episodes, lmbda):
     return V_from_Q(dtimestep.experience.Q)
 
 
-def train_linfa(n_episodes, lmbda):
-    dtimestep = DTimestep(reset(), 0, linfa.init(lmbda), None)
+def train_linfa(n_episodes, lmbda, alpha=0.01):
+    dtimestep = DTimestep(reset(), 0, linfa.init(lmbda, alpha), None)
     for _ in xrange(n_episodes):
         dtimestep = train_and_prep_linfa(dtimestep)
 
@@ -42,9 +42,9 @@ def train_Qs(n_episodes, lmbda):
     return Qs
 
 
-def train_Qs_linfa(n_episodes, lmbda):
+def train_Qs_linfa(n_episodes, lmbda, alpha=0.01):
     Qs = np.empty((n_episodes, 10, 21, 2))
-    dtimestep = DTimestep(reset(), 0, linfa.init(lmbda), None)
+    dtimestep = DTimestep(reset(), 0, linfa.init(lmbda, alpha), None)
     for i in xrange(n_episodes):
         dtimestep = train_and_prep_linfa(dtimestep)
         Qs[i] = linfa.Q_from_theta(dtimestep.experience.theta)
