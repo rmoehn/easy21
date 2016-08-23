@@ -24,12 +24,16 @@ def train(n_episodes, lmbda):
     return V_from_Q(dtimestep.experience.Q)
 
 
-def train_linfa(n_episodes, lmbda, alpha=0.01):
-    dtimestep = DTimestep(reset(), 0, linfa.init(lmbda, alpha), None)
+def train_linfa(n_episodes, lmbda, alpha=0.01, feature=None):
+    feature = feature if feature is not None \
+                      else linfa.prepare_feature(linfa.feature_slow)
+    init_experience = linfa.init(lmbda, alpha, feature)
+
+    dtimestep = DTimestep(reset(), 0, init_experience, None)
     for _ in xrange(n_episodes):
         dtimestep = train_and_prep_linfa(dtimestep)
 
-    return V_from_Q(linfa.Q_from_theta(dtimestep.experience.theta))
+    return V_from_Q(linfa.Q(dtimestep.experience))
 
 
 def train_Qs(n_episodes, lmbda):
@@ -42,12 +46,16 @@ def train_Qs(n_episodes, lmbda):
     return Qs
 
 
-def train_Qs_linfa(n_episodes, lmbda, alpha=0.01):
+def train_Qs_linfa(n_episodes, lmbda, alpha=0.01, feature=None):
+    feature = feature if feature is not None \
+                      else linfa.prepare_feature(linfa.feature_slow)
+    init_experience = linfa.init(lmbda, alpha, feature)
+
     Qs = np.empty((n_episodes, 10, 21, 2))
-    dtimestep = DTimestep(reset(), 0, linfa.init(lmbda, alpha), None)
+    dtimestep = DTimestep(reset(), 0, init_experience, None)
     for i in xrange(n_episodes):
         dtimestep = train_and_prep_linfa(dtimestep)
-        Qs[i] = linfa.Q_from_theta(dtimestep.experience.theta)
+        Qs[i] = linfa.Q(dtimestep.experience)
 
     return Qs
 
