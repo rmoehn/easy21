@@ -78,6 +78,18 @@ def plot_msq_errors(train, V, n_episodes):
     pyplot.show()
 
 
+def plot_avg_msq_errors(train, V, n_episodes, n_runs=100):
+    Vss = np.array([
+                       [train(n_episodes, lmbdax10 * 0.1)
+                            for lmbdax10 in xrange(0, 11)]
+                       for _ in xrange(n_runs)
+                   ])
+    msq_errors = np.sum((Vss - V) ** 2, axis=(0, 2, 3)) \
+                     * (1.0 / n_runs / 10 / 21)
+    pyplot.plot(msq_errors)
+    pyplot.show()
+
+
 def plot_learning_rate(V, Qs):
     Vs_per_dt = np.amax(Qs, axis=3)
     msq_errors_per_dt = np.sum((Vs_per_dt - V) ** 2, axis=(1,2))
