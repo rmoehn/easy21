@@ -7,8 +7,8 @@
   {::e/observation 2
    ::e/done? false})
 
-(def reward-for [[[0] [3]]
-                 [[1]  [2]]])
+(def reward-for [[[-1 1] [0 0 9]]
+                 [[0 2]  [2 3]]])
 
 ; Note: Observation 0, 1 → action taken before; 2 → starting state.
 (defn step [{:keys [::e/observation]} action]
