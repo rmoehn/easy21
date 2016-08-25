@@ -12,6 +12,7 @@
             [clojure.string :as string]
             [clojure.tools.namespace.repl :refer [refresh]]
             [easy21.core :as easy21 :refer :all]
+            [easy21.two-round-nd :as tworound]
             [incanter.core :as incanter]
             [incanter.charts :as charts]))
 
@@ -91,6 +92,61 @@
     (spit "data.csv" (string/join \newline
                                   (map #(string/join " " %)
                                        (m/emap double the-v-matrix))))))
+
+
+  (time
+    (with-redefs [easy21/rand-action tworound/rand-action] ; *cough* *cough*
+      (let [complete-step (stepper tworound/step policy-think)
+            train-and-prep (make-train-and-prep tworound/reset init complete-step
+                                                wrapup)
+
+            timestep-vectors
+            (->> [(tworound/reset) 0 (init) nil]
+                 (iterate train-and-prep))
+
+            n 1000
+
+            ;some-timestep-vector
+            ;(->> timestep-vectors
+            ;     (drop n)
+            ;     first)
+
+            ;experience (nth some-timestep-vector 2)
+
+            ;the-v-vector
+            ;(-> experience
+            ;    ::easy21/q
+            ;    v-from-q
+            ;    tworound/v-vector)
+
+
+            experiences (r/map #(get % 2) (r/take n timestep-vectors))
+
+            v-vectors
+            (->> experiences
+                 (r/map ::easy21/q)
+                 (r/map v-from-q)
+                 (r/map tworound/v-vector))
+
+            ; Credits: https://math.stackexchange.com/questions/507742/distance-similarity-between-two-matrices
+            differences
+            (->> (partition 2 1 (into [] v-vectors))
+                 (r/map #(apply m/sub %))
+                 (r/map linear/norm)
+                 (r/map #(if (< % 0.0001) -1 %))
+                 ;(r/partition 10)
+                 ;(r/map #(reduce + %))
+                 (into [])
+                 )
+
+            the-v-vector
+            (->> v-vectors
+                 (into [])
+                 last)
+            ]
+        (incanter/view (charts/line-chart (range (count differences)) differences))
+        (incanter/view (charts/line-chart (range (count the-v-vector))
+                                          the-v-vector)))))
 
 
   (require '[com.rpl.specter :refer [ALL END LAST] :as sr]
